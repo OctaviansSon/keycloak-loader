@@ -1,0 +1,55 @@
+pipeline {
+    agent any
+
+    environment {
+        GIT_CREDENTIALS = 'git'
+        PROJECT_DIR = '/###/keycloak/'
+        GIT_REPO = 'git@gitlab.com:###/keycloak.git'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    sh """
+                        set -e
+                        sudo rm -rf ${PROJECT_DIR}
+                        git clone ${GIT_REPO} ${PROJECT_DIR}
+                        sudo chown -R jenkins:jenkins ${PROJECT_DIR}
+                    """
+                }
+            }
+        }
+
+        stage('Create .env for Keycloak') {
+            steps {
+                script {
+                    def envContent = '''KEYCLOAK_POSTGRES_DB=####
+KEYCLOAK_POSTGRES_USER=####
+KEYCLOAK_POSTGRES_PASSWORD=####
+
+KEYCLOAK_ADMIN=####
+KEYCLOAK_ADMIN_PASSWORD=###
+
+KC_HOSTNAME=####
+'''
+                    writeFile file: "${PROJECT_DIR}/.env", text: envContent
+                }
+            }
+        }
+
+        stage('Deploy Keycloak') {
+            steps {
+                script {
+                    dir("${PROJECT_DIR}") {
+                        sh """
+                            set -e
+                            docker compose -f docker-compose.keycloak.yml down --remove-orphans
+                            docker compose -f docker-compose.keycloak.yml up -d
+                        """
+                    }
+                }
+            }
+        }
+    }
+}

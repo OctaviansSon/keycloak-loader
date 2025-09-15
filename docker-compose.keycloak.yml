@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  keycloak-db:
+    image: postgres:16
+    container_name: keycloak-db
+    environment:
+      POSTGRES_DB: ${KEYCLOAK_POSTGRES_DB}
+      POSTGRES_USER: ${KEYCLOAK_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${KEYCLOAK_POSTGRES_PASSWORD}
+    volumes:
+      - keycloak_postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - keycloak-net
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${KEYCLOAK_POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.2
+    container_name: keycloak
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL_HOST: keycloak-db
+      KC_DB_USERNAME: ${KEYCLOAK_POSTGRES_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_POSTGRES_PASSWORD}
+      KC_PROXY: edge
+      KC_HOSTNAME: ${KC_HOSTNAME}   # например keyauth.easymaster.kz
+      KC_HEAP: "512m"
+      KC_HTTPS_CERTIFICATE_FILE: "/etc/x509/https/tls.crt"
+      KC_HTTPS_CERTIFICATE_KEY_FILE: "/etc/x509/https/tls.key"
+      JAVA_OPTS: "-XX:MaxRAMPercentage=50 -XX:MinRAMPercentage=30 -XX:InitialRAMPercentage=20"
+    volumes:
+      - /home/deploy/keycloak-cert/tls.crt:/etc/x509/https/tls.crt:ro
+      - /home/deploy/keycloak-cert/tls.key:/etc/x509/https/tls.key:ro
+
+    ports:
+      - "8443:8443"
+    command:
+      - start
+      - --hostname-strict=false
+      - --https-port=8443
+      - --https-certificate-file=/etc/x509/https/tls.crt
+      - --https-certificate-key-file=/etc/x509/https/tls.key
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - keycloak-net
+
+volumes:
+  keycloak_postgres_data:
+
+networks:
+  keycloak-net:
+    driver: bridge
